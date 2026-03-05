@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import frappe
 from frappe import _, are_emails_muted, safe_encode, task
-from frappe.core.utils import html2text
+from frappe.core.utils import html_to_plain_text
 from frappe.database.database import savepoint
 from frappe.email.doctype.email_account.email_account import EmailAccount
 from frappe.email.email_body import add_attachment, get_email, get_formatted_html
@@ -514,7 +514,18 @@ def send_now(name: str | int, force_send: bool = False):
 @frappe.whitelist()
 def toggle_sending(enable: bool | int | str):
 	frappe.only_for("System Manager")
-	frappe.db.set_default("suspend_email_queue", 0 if sbool(enable) else 1)
+	suspend_value = 0 if sbool(enable) else 1
+	frappe.db.set_default("suspend_email_queue", suspend_value)
+
+	action = "Resumed" if suspend_value == 0 else "Suspended"
+	frappe.get_doc(
+		{
+			"doctype": "Activity Log",
+			"user": frappe.session.user,
+			"status": "Success",
+			"subject": f"Email Queue sending {action.lower()}",
+		}
+	).insert(ignore_permissions=True, ignore_links=True)
 
 
 def on_doctype_update():
@@ -680,7 +691,7 @@ class QueueBuilder:
 			return self._text_content + unsubscribe_text_message
 
 		try:
-			text_content = html2text(self._message)
+			text_content = html_to_plain_text(self._message)
 		except Exception:
 			text_content = "See html attachment"
 		return text_content + unsubscribe_text_message

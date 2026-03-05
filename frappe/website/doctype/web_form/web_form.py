@@ -259,7 +259,7 @@ def get_context(context):
 		context.boot = get_boot_data()
 		context.boot["link_title_doctypes"] = frappe.boot.get_link_title_doctypes()
 
-		context.webform_banner_image = self.banner_image
+		context.webform_banner_image = context.get("banner_image") or self.banner_image
 		context.pop("banner_image", None)
 
 	def add_metatags(self, context):
@@ -839,9 +839,17 @@ def has_link_option(fields, doctype):
 	for f in fields:
 		if f.options == doctype:
 			return True
-		if hasattr(f, "fields") and isinstance(f.fields, list):
-			if has_link_option(f.fields, doctype):
-				return True
+		if f.fieldtype == "Table" and f.options:
+			child_doctype = f.options
+			if not isinstance(child_doctype, str) or not child_doctype.strip():
+				continue
+			try:
+				child_table_fields = frappe.get_meta(child_doctype).fields
+			except Exception:
+				continue
+			for child_field in child_table_fields:
+				if getattr(child_field, "options", None) == doctype:
+					return True
 	return False
 
 
